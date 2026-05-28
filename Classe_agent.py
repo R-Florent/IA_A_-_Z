@@ -79,7 +79,7 @@ class Agent:
 
         self.train_losses.append(avg_train_loss)
         self.train_accuracies.append(avg_train_accuracies)
-
+        print(f"Model{self.id}"f" - Acc:{avg_train_accuracies} % - Loss:{avg_train_loss} %")
         return avg_train_loss,avg_train_accuracies
 
 
