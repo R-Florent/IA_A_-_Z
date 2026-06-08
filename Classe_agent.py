@@ -40,6 +40,8 @@ class Agent:
         self.train_accuracies = []
         self.val_losses = []
         self.val_accuracies = []
+        self.loss_validate_list = []        # list of validate loss use outise the méthode of the classe for doing metric evry were we whant
+        self.accuracy_validate_list = []    #list of validate accuracy use outise the méthode of the classe for doing metric evry were we whant
 
 
 
