@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 import torch.optim as optim
 import torch
-
+import copy
 
 class Agent:
     def __init__(self,
@@ -13,7 +13,8 @@ class Agent:
                  momentum,
                  trainloader,
                  testloader,
-                 device):
+                 device,
+                 neighbors):
 
         self.id = agent_id
 
@@ -42,7 +43,8 @@ class Agent:
         self.val_accuracies = []
         self.loss_validate_list = []        # list of validate loss use outise the méthode of the classe for doing metric evry were we whant
         self.accuracy_validate_list = []    #list of validate accuracy use outise the méthode of the classe for doing metric evry were we whant
-
+        self.total_distance_list = []       #list of the distance bewteen avrage of the node weight and curent node weight of this agent
+        self.avg_state_dict_list = []       #list of the distance avrage of the node weight of evry agent
 
 
     def train_one_epoch(self):
@@ -79,13 +81,11 @@ class Agent:
         avg_train_loss = running_loss / len(self.trainloader)
         avg_train_accuracies = 100 * correct / total
 
-        self.train_losses.append(avg_train_loss)
-        self.train_accuracies.append(avg_train_accuracies)
         print(f"Model{self.id}"f" - Acc:{avg_train_accuracies} % - Loss:{avg_train_loss} %")
         return avg_train_loss,avg_train_accuracies
 
 
-    def validate(self):
+    def validate_one_epoch(self):
 
         self.model.eval()
 
@@ -116,30 +116,31 @@ class Agent:
 
         accuracy = 100 * correct / total
 
-        self.val_losses.append(avg_loss)
-        self.val_accuracies.append(accuracy)
-
         return avg_loss, accuracy
 
-    def train_and_validate(self):
+    def train_and_validate(self,agent_list):
 
         try:
+            val_loss, val_acc = self.validate_one_epoch()
 
+            self.val_losses.append(val_loss)
+            self.val_accuracies.append(val_acc)
+
+            node_weight_metric = self.node_weight_metric(agent_list)
+            self.total_distance_list.append(node_weight_metric)
+
+            
             train_loss, train_acc = self.train_one_epoch()
 
-            val_loss, val_acc = self.validate()
+            self.train_losses.append(train_loss)
+            self.train_accuracies.append(train_acc)
 
+            return train_loss, train_acc, val_loss, val_acc
             print(f"Agent {self.id} OK")
 
         except Exception as e:
 
             print(f"Erreur agent {self.id} : {e}")
-
-    def val_one_epoch(self):
-        thread = threading.Thread(
-            target=self.train_one_epoch,
-            args=(self.model, self.trainloader, self.optimizer)
-        )
 
     def communicate(self, other_agent):
 
@@ -153,6 +154,38 @@ class Agent:
 
         self.model.load_state_dict(averaged_weights)
         other_agent.model.load_state_dict(averaged_weights)
+
+
+    @staticmethod
+    def node_weight_metric(agent_list):
+        total_distance_list = []
+        avg_state_dict = copy.deepcopy(agent_list[0].model.state_dict())
+
+        # moyenne
+        for key in avg_state_dict:
+
+            for i in range(1, len(agent_list)):
+                avg_state_dict[key] += (
+                    agent_list[i].model.state_dict()[key]
+                )
+
+            avg_state_dict[key] /= len(agent_list)
+
+        # différences
+        for agent_id, agent in enumerate(agent_list):
+            total_distance = 0
+
+            for key in avg_state_dict:
+                diff = (
+                        avg_state_dict[key]
+                        - agent.model.state_dict()[key]
+                )
+
+                distance = torch.norm(diff).item()
+                total_distance += distance
+            total_distance_list.append(total_distance)
+
+        return total_distance_list
 
     def plot_metrics(self):
 
