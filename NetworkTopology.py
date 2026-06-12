@@ -75,6 +75,5 @@ class NetworkTopology:
         return neighbors
 
 
-
 graph = NetworkTopology.fully_connected_graph(10)
 NetworkTopology.visualize_graph(graph)
