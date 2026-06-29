@@ -28,7 +28,6 @@ class NetworkTopology:
         """
         Grille 2D (ex: 3×3 pour 9 agents)
         """
-        # Trouver la grille la plus carrée possible
         cols = int(n_agents ** 0.5)
         while n_agents % cols != 0:
             cols -= 1
@@ -74,6 +73,12 @@ class NetworkTopology:
             neighbors[node] = list(graph.neighbors(node))
         return neighbors
 
+    @staticmethod
+    def get_neighbors(graph, agent_id):
+        """Return list of neighbor IDs for a given agent"""
+        return list(graph.neighbors(agent_id))
 
-graph = NetworkTopology.fully_connected_graph(10)
-NetworkTopology.visualize_graph(graph)
+    @staticmethod
+    def is_neighbor(graph, agent_id, other_agent_id):
+        """Check if two agents are neighbors"""
+        return other_agent_id in graph.neighbors(agent_id)
