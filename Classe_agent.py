@@ -126,9 +126,6 @@ class Agent:
             self.val_losses.append(val_loss)
             self.val_accuracies.append(val_acc)
 
-            node_weight_metric = self.node_weight_metric(agent_list)
-            self.total_distance_list.append(node_weight_metric)
-
             
             train_loss, train_acc = self.train_one_epoch()
 
