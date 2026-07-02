@@ -1,8 +1,6 @@
-import matplotlib.pyplot as plt
-
 import copy
-from Classe_agent import Agent
-from NetworkTopology import NetworkTopology
+from agents.Classe_agent import Agent
+from topologies.NetworkTopology import NetworkTopology
 
 
 # In main.py or training.py

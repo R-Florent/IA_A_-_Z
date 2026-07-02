@@ -1,18 +1,15 @@
-import torch
 import threading
-import copy
-import matplotlib.pyplot as plt
 import numpy as np
-from datetime import datetime
 
-
+from metrics.metrics import*
+from synchronize_weight import*
 class ExperimentRunner:
     """
     Lance plusieurs expériences avec différentes topologies
     et compare les metrics
     """
 
-    def __init__(self, num_epochs, num_agents, synchronization_func):
+    def __init__(self, num_epochs, num_agents, synchronization_func,trainloaders_list,testloader):
         self.num_epochs = num_epochs
         self.num_agents = num_agents
         self.synchronization_func = synchronization_func
@@ -41,6 +38,7 @@ class ExperimentRunner:
     # ============================================
 
     def create_fresh_agents(self, device='cpu'):
+        datasets_list = random_split(trainset, [split] * N_AGENT)  # split dataset in N agent pefectly
         """
         Crée une nouvelle liste d'agents vierges
         """
@@ -48,14 +46,18 @@ class ExperimentRunner:
         for i in range(self.num_agents):
             agent = Agent(
                 agent_id=i,
-                model=YourModel(),  # ← Adapte selon ton modèle
-                device=device
+                learning_rate=0.001,
+                momentum=0.9,
+                trainloader=trainloaders_list[e],
+                testloader=testloader,
+                device=DEVICE,
+                neighbors=agent_list
             )
             agent_list.append(agent)
         return agent_list
 
     # ============================================
-    # 3️⃣ RUNNER PRINCIPAL
+    # 3 RUNNER PRINCIPAL
     # ============================================
 
     def run_experiment(self, topology_name, graph, agent_list, k=1):
@@ -118,7 +120,7 @@ class ExperimentRunner:
     # 4️⃣ LANCER TOUTES LES EXPÉRIENCES
     # ============================================
 
-    def run_all_experiments(self, k=1, device='cpu'):
+    def run_all_experiments(self, k=5, device='cpu'):
         """
         Lance TOUTES les topologies l'une après l'autre
         """
