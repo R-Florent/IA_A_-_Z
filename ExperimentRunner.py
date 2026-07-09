@@ -3,6 +3,8 @@ import numpy as np
 
 from metrics.metrics import*
 from synchronize_weight import*
+
+
 class ExperimentRunner:
     """
     Lance plusieurs expériences avec différentes topologies
