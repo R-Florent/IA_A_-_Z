@@ -24,7 +24,7 @@ def synchronize_with_topology(agent_list, graph):
             }
 
             agent.model.load_state_dict(averaged)
-#%%
+
 def consensus_step(agent_list, graph):
 
     new_weights = {}
@@ -58,7 +58,7 @@ def consensus_step(agent_list, graph):
     # Mise à jour simultanée
     for agent in agent_list:
         agent.model.load_state_dict(new_weights[agent.id])
-#%%
+
 def consensu_algortyme(agent_list, graph, K=5):
 
     r = {}
@@ -113,7 +113,7 @@ def synchronize_models_average(agent_list):
     # appliquer les poids moyens à tous les agents
     for agent in agent_list:
         agent.model.load_state_dict(avg_state_dict)
-#%%
+
 def synchronize_models_cycle(agent_list):
     state_dict_list = []
 
