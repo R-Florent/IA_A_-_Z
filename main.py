@@ -242,4 +242,4 @@ class DecentralizedFederatedLearning:
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    agent_test = DecentralizedFederatedLearning
+    print("hello world")
