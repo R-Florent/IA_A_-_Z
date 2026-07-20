@@ -160,7 +160,6 @@ class ModelMetrics:
                 "median": param_flat.median().item(),
                 "sum": param_flat.sum().item(),
             }
-
         return stats
 
     # ============================================
@@ -211,67 +210,6 @@ class ModelMetrics:
             "total_variance": total_variance,
             "distances_per_agent": distances,
         }
-
-    # ============================================
-    # 8️ AFFICHAGE FORMATÉ
-    # ============================================
-
-    def print_all_metrics(self, epoch):
-        """
-        Affiche TOUTES les metrics de manière lisible
-        """
-        print(f"\n{'=' * 70}")
-        print(f"📊 METRICS - Epoch {epoch}")
-        print(f"{'=' * 70}\n")
-
-        # Distances
-        print("🔹 WEIGHT DISTANCES (Synchronisation)")
-        print("-" * 70)
-        distances, _ = self.compute_weight_distances(self.agent_list)
-        for agent_id, dist in distances.items():
-            bar = "█" * int(min(dist / 2, 40))
-            print(f"  Agent {agent_id}: {dist:8.2f}  {bar}")
-        avg_dist = sum(distances.values()) / len(distances)
-        print(f"  Average:  {avg_dist:8.2f}\n")
-
-        # Variance
-        print("🔹 PARAMETER VARIANCE")
-        print("-" * 70)
-        var_dict, total_var = self.compute_parameter_variance(self.agent_list)
-        for layer, var in var_dict.items():
-            bar = "▓" * int(min(var * 100, 40))
-            print(f"  {layer:<30} Var = {var:.6f}  {bar}")
-        print(f"  Total Variance: {total_var:.6f}\n")
-
-        # Communication Cost
-        print("🔹 COMMUNICATION COST")
-        print("-" * 70)
-        comm_cost = self.compute_communication_cost(self.agent_list)
-        print(f"  Total Parameters:        {comm_cost['total_params_count']:,}")
-        print(f"  Model Size:              {comm_cost['total_params_MB']:.2f} MB")
-        print(f"  Cost per Communication:  {comm_cost['cost_per_communication']:,} bytes")
-        print(f"  Cost per Cycle (all):    {comm_cost['cost_per_cycle_all_agents']:,} bytes")
-        print(f"  Cost per Cycle (all):    {comm_cost['cost_per_cycle_all_agents'] / (1024 ** 2):.2f} MB\n")
-
-        # Parameter Statistics
-        print("🔹 PARAMETER STATISTICS (Agent 0)")
-        print("-" * 70)
-        param_stats = self.compute_parameter_statistics(self.agent_list)
-        for layer, stats in param_stats.items():
-            print(f"  {layer:<30}")
-            print(f"    Mean: {stats['mean']:8.4f} | Std: {stats['std']:8.4f}")
-            print(f"    Min:  {stats['min']:8.4f} | Max: {stats['max']:8.4f}\n")
-
-        # Convergence
-        print("🔹 CONVERGENCE STATUS")
-        print("-" * 70)
-        conv = self.compute_convergence_metrics(self.agent_list, epoch)
-        print(f"  Max Distance:     {conv['max_distance']:.4f}")
-        print(f"  Min Distance:     {conv['min_distance']:.4f}")
-        print(f"  Avg Distance:     {conv['avg_distance']:.4f}")
-        print(f"  Total Variance:   {conv['total_variance']:.6f}")
-
-        print(f"\n{'=' * 70}\n")
 
     # ============================================
     # SAUVEGARDER L'HISTORIQUE

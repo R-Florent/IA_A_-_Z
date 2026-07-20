@@ -1,15 +1,12 @@
 import torch
 import torchvision
 import torchvision.transforms as transforms
-
 from torch.utils.data import random_split, DataLoader
-
-from models.model import Net,AlexNet
-from metrics.metrics import *
-from synchronize_weight import*
+from agents.Classe_agent import Agent
+from models.model import Net
 
 
-def genereate_agent(BATCH_SIZE,N_AGENT,DEVICE):
+def generate_agent(BATCH_SIZE, N_AGENT, DEVICE):
 
     transform = transforms.Compose(
                 [transforms.ToTensor(),

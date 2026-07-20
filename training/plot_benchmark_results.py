@@ -151,5 +151,6 @@ def benchmark_sequential(
         )
         results.append(result)
         print(result)
+        print("result")
 
     return results

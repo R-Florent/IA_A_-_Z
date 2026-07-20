@@ -1,10 +1,14 @@
 import copy
+import threading
+import torch
+import torchvision
+import torchvision.transforms as transforms
 
 from metrics.Classe_model_metrics import ModelMetrics
+from metrics.metrics import *
+from training.scrpit_generate_agent import generate_agent
 from agents.Classe_agent import Agent
 from synchronize_weight import*
-import threading
-
 # ──────────────────────────────────────────────────────────────
 # Structure de résultat pour un run
 # ──────────────────────────────────────────────────────────────
@@ -110,7 +114,7 @@ def benchmark_sequential(
         print(f"{'='*60}")
 
         # ── Agents frais à chaque run ──────────────────────────────
-        agent_list = genereate_agent(BATCH_SIZE,N_AGENT,DEVICE)
+        agent_list = generate_agent(BATCH_SIZE,N_AGENT,DEVICE)
 
         metrics = train_agent(agent_list, num_epochs, graph, k, communication_fn)
 

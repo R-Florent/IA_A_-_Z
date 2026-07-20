@@ -45,6 +45,8 @@ class Agent:
         self.accuracy_validate_list = []    #list of validate accuracy use outise the méthode of the classe for doing metric evry were we whant
         self.total_distance_list = []       #list of the distance bewteen avrage of the node weight and curent node weight of this agent
         self.avg_state_dict_list = []       #list of the distance avrage of the node weight of evry agent
+        self.weight_std_list = []           # Std des poids de CET agent par époque
+        self.epoch_compute_times = []
 
 
     def train_one_epoch(self):
