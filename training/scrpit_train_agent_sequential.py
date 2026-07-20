@@ -1,14 +1,6 @@
-# benchmark/benchmark.py
-import sys
-from pathlib import Path
-import copy
-import threading
-from metrics.Classe_model_metrics import ModelMetrics
-from metrics.Classe_EpochTimer import EpochTimer
-from agents.Classe_agent import Agent
 from training.scrpit_generate_agent import generate_agent
 from metrics.Classe_RunResult import RunResult
-sys.path.insert(1, '')
+from training.scprit_train_agent import train_agent
 
 # ──────────────────────────────────────────────────────────────
 # Benchmark séquentiel
@@ -49,7 +41,7 @@ def train_sequential(
         # ── Agents frais à chaque run ──────────────────────────────
         agent_list = generate_agent(BATCH_SIZE, N_AGENT, DEVICE)
 
-        metrics = _train_agent_run(agent_list, num_epochs, graph, k, communication_fn)
+        metrics = train_agent(agent_list, num_epochs, graph, k, communication_fn)
 
         result = RunResult(
             method_name=method_name,
