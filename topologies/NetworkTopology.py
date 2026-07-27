@@ -14,6 +14,20 @@ class NetworkTopology:
         return G
 
     @staticmethod
+    def cycle_graph_amiltionen(n_agents):
+        if n_agents < 2:
+            raise ValueError("Un graphe hamiltonien nécessite au moins 2 nœuds.")
+
+        G = nx.DiGraph()
+        G.add_nodes_from(range(n_agents))
+
+        # ── Hamiltonien Cycle : 0→1→2→...→n-1→0 ────────
+        for i in range(n_agents):
+            G.add_edge(i, (i + 1) % n_agents)
+
+        return G
+
+    @staticmethod
     def star_graph(n_agents):
         G = nx.star_graph(n_agents - 1)  # nx.star_graph(n) crée n+1 nœuds
         return G

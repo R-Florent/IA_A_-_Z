@@ -2,7 +2,9 @@ import threading
 from metrics.Classe_model_metrics import ModelMetrics
 from synchronize_weight import*
 
+
 def train_agent(agent_list,num_epochs,graph,k,communication_model):
+
     metrics = ModelMetrics(agent_list)
 
     for epoch in range(num_epochs):
@@ -32,7 +34,7 @@ def train_agent(agent_list,num_epochs,graph,k,communication_model):
         for agent, distance in zip(agent_list, distances):
             agent.total_distance_list.append(distance)
 
-        communication_model(agent_list,graph,k)
+        communication_model(agent_list,graph,k,epoch,num_epochs)
 
         metrics.log_metrics(epoch)
 

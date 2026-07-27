@@ -7,14 +7,14 @@ from training.scprit_train_agent import train_agent
 # ──────────────────────────────────────────────────────────────
 
 def train_sequential(
-    communication_methods: dict,   # {"nom": fn, ...}
-    num_epochs: int,
-    graph,
-    k: int,
-    BATCH_SIZE: int,
-    N_AGENT: int,
-    DEVICE,
-) -> list[RunResult]:
+                    communication_methods: dict,   # {"nom": fn, ...}
+                    num_epochs: int,
+                    graph,
+                    k: int,
+                    BATCH_SIZE: int,
+                    N_AGENT: int,
+                    DEVICE,
+                    ) -> list[RunResult]:
     """
     Entraîne chaque méthode l'une après l'autre.
     Les agents sont RÉINITIALISÉS entre chaque méthode pour une comparaison équitable.
@@ -52,4 +52,7 @@ def train_sequential(
         results.append(result)
         print(result)
 
+
     return results
+
+
