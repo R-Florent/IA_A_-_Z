@@ -4,6 +4,8 @@ from topologies.NetworkTopology import NetworkTopology
 
 
 # In main.py or training.py
+
+# Consensus in Topology
 def synchronize_with_topology(agent_list, graph):
     """
     Synchronize all agents according to network topology
@@ -59,7 +61,7 @@ def consensus_step(agent_list, graph):
     for agent in agent_list:
         agent.model.load_state_dict(new_weights[agent.id])
 
-def consensu_algortyme(agent_list, graph, K=5):
+def Average_consensus_algorithm(agent_list, graph, K=5):
 
     r = {}
     for agent_id, agent in enumerate(agent_list):
@@ -93,10 +95,10 @@ def consensu_algortyme(agent_list, graph, K=5):
         distances = Agent.node_weight_metric(agent_list)
         avg_distance = sum(distances) / len(distances)
         print(f"    → Distance moyenne après iter {k+1}: {avg_distance:.6f}")
-
     return r
 
-def synchronize_models_average(agent_list):
+# Average Global
+def avg_models_algorithm(agent_list):
 
     # récupérer les poids du premier modèle
     avg_state_dict = copy.deepcopy(agent_list[0].model.state_dict())
@@ -114,7 +116,8 @@ def synchronize_models_average(agent_list):
     for agent in agent_list:
         agent.model.load_state_dict(avg_state_dict)
 
-def synchronize_models_cycle(agent_list):
+# Hamiltonian cycle
+def Hamiltonian_cycle_algorithm(agent_list):
     state_dict_list = []
 
     for agent in agent_list:
@@ -124,6 +127,45 @@ def synchronize_models_cycle(agent_list):
     for e,agent in enumerate(agent_list):
         agent.model.load_state_dict(state_dict_list[(e+1) % len(agent_list)])
 
-
     # Charger les nouveaux poid
 
+
+
+count_epoches = 0
+
+def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list, K,NUM_EPOCHES):
+    graphe = NetworkTopology.cycle_graph_amiltionen(len(agent_list))
+
+    while count_epoches != NUM_EPOCHES:
+
+        count_epoches += 1
+    for k in range(K):
+
+        r_new = {}
+
+        for agent_id, agent in enumerate(agent_list):
+
+            participants = [agent.id] + list(graphe.neighbors(agent.id))
+
+            avg_state = copy.deepcopy(agent_list[participants[0]].model.state_dict())
+
+            for key in avg_state:
+
+                for participant_id in participants[1:]:
+                    avg_state[key] += r[participant_id][key]
+
+                avg_state[key] /= len(participants)
+
+            r_new[agent_id] = avg_state
+
+        r = r_new
+
+        for agent_id, agent in enumerate(agent_list):
+            agent.model.load_state_dict(r[agent_id])
+
+        distances = Agent.node_weight_metric(agent_list)
+        avg_distance = sum(distances) / len(distances)
+        print(f"    → Distance moyenne après iter {k + 1}: {avg_distance:.6f}")
+    return r
+
+    consensus_step(agent_list, state_dict_list)
