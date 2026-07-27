@@ -1,0 +1,13 @@
+# --- hyperparamètres ---
+
+RANDOM_SEED = 123
+BATCH_SIZE = 10
+NUM_EPOCHES = 10
+
+MOMENTUM = 0.9
+LEARING_RATE = 0.001
+SCALE = 0.1
+IMG_SIZE = (128, 128)
+LATENT_DIM = 10
+N_AGENT = 5
+k = 5
