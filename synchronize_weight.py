@@ -2,7 +2,6 @@ import copy
 from agents.Classe_agent import Agent
 from topologies.NetworkTopology import NetworkTopology
 from hyperparametres import NUM_EPOCHES
-from training.scprit_train_agent import get_epochs
 
 # In main.py or training.py
 
@@ -136,10 +135,10 @@ count_epoches = 0
 
 def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list,K,epoch,num_epochs,):
 
-    n           = len(agent_list)
+    n = len(agent_list)
     hamil_graph = NetworkTopology.cycle_graph_amiltionen(n)
 
-    if epoch < num_epochs - 1:
+    if epoch < num_epochs - 2:
         # ── Phase 1 : Rotation hamiltonienne ──────────────────────────────────
         print("    [Hybrid] Phase 1 —  hamiltonienne rotation …")
         snapshots = [
@@ -149,13 +148,15 @@ def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list,K,epoch,num_epochs,
         for i, agent in enumerate(agent_list):
             predecessor = (i - 1) % n
             agent.model.load_state_dict(snapshots[predecessor])
+
+
+    else:
         r = {
             agent_id: copy.deepcopy(agent.model.state_dict())
             for agent_id, agent in enumerate(agent_list)
         }
-
-    else:
         for iteration in range(K):
+
             r_new = {}
 
             for agent_id, agent in enumerate(agent_list):
@@ -176,4 +177,3 @@ def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list,K,epoch,num_epochs,
                 agent.model.load_state_dict(r[agent_id])
 
         return r
-

@@ -1,13 +1,12 @@
 from training.scrpit_generate_agent import generate_agent
 from metrics.Classe_RunResult import RunResult
-from training.scprit_train_agent import train_agent
+from training.scprit_train_agent import train_agent,train_agent_chrono
 
 # ──────────────────────────────────────────────────────────────
 # Benchmark séquentiel
 # ──────────────────────────────────────────────────────────────
 
-def train_sequential(
-                    communication_methods: dict,   # {"nom": fn, ...}
+def train_sequential(communication_methods: dict,   # {"nom": fn, ...}
                     num_epochs: int,
                     graph,
                     k: int,
@@ -52,7 +51,23 @@ def train_sequential(
         results.append(result)
         print(result)
 
-
     return results
 
 
+def benchmark_sequential(communication_methods, num_epochs,
+                         graph, k, BATCH_SIZE, N_AGENT, DEVICE):
+    results = []
+
+    for method_name, communication_fn in communication_methods.items():
+        print(f"\n{'='*60}\n  RUN — méthode : {method_name}\n{'='*60}")
+
+        # ── Agents frais à chaque run ──────────────────────────────
+        agent_list = generate_agent(BATCH_SIZE, N_AGENT, DEVICE)
+
+        metrics,timer  = train_agent_chrono(agent_list, num_epochs, graph, k, communication_fn)
+
+        result = RunResult(method_name, agent_list, metrics, timer)
+        results.append(result)
+        print(result)
+
+    return results
