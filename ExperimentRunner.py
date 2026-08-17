@@ -2,7 +2,7 @@ import threading
 import numpy as np
 
 from metrics.metrics import*
-from synchronize_weight import*
+from synchronize_weight_brouillon import*
 
 
 class ExperimentRunner:

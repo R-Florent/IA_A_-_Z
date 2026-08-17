@@ -1,12 +1,36 @@
 import copy
 import matplotlib.pyplot as plt
 import torch
-from metrics.Classe_EpochTimer import EpochTimer
 
-import time
 import copy
 import torch
 
+# plot accuracy and loss by agent
+def plot_metrics(agent):
+    epochs = range(1, len(agent.train_losses) + 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # LOSS
+    axes[0].plot(epochs, agent.train_losses, label="Train Loss")
+    axes[0].plot(epochs, agent.val_losses, label="Validation Loss")
+
+    axes[0].set_title(f"{agent.id} Loss")
+    axes[0].set_xlabel("Epoch")
+    axes[0].set_ylabel("Loss")
+    axes[0].legend()
+
+    # ACCURACY
+    axes[1].plot(epochs, agent.val_accuracies, label="Val accuracies")
+    axes[1].plot(epochs, agent.train_accuracies, label="Train accuracies")
+
+    axes[1].set_title(f"{agent.id} Accuracy")
+    axes[1].set_xlabel("Epoch")
+    axes[1].set_ylabel("Accuracy (%)")
+    axes[1].legend()
+
+    # plt.tight_layout()
+    plt.show()
 
 def plot_all_agents_metrics(agent_list):
 

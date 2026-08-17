@@ -59,7 +59,7 @@ class ModelMetrics:
         """
         # Calcule la moyenne
         avg_state_dict = copy.deepcopy(agent_list[0].model.state_dict())
-
+        
         for key in avg_state_dict:
             for i in range(1, len(agent_list)):
                 avg_state_dict[key] += agent_list[i].model.state_dict()[key]
