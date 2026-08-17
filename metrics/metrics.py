@@ -22,6 +22,7 @@ from agents.Classe_agent import Agent
 
 def node_weight_metric(agent_list):
 
+
     avg_state_dict = copy.deepcopy(
         agent_list[0].model.state_dict()
     )
@@ -134,12 +135,36 @@ def plot_all_agent_node_weight_metric(agent_list):
     plt.legend()
     plt.show()
 
+def plot_average_distance(results):
+
+    plt.figure(figsize=(8,5))
+
+    for result in results:
+        epochs = [m["epoch"] for m in result.metrics.history]
+        avg_dist = [
+            m["convergence"]["avg_distance"]
+            for m in result.metrics.history
+        ]
+
+        plt.plot(
+            epochs,
+            avg_dist,
+            label=result.method_name
+        )
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Average Weight Distance")
+    plt.title("Consensus Convergence")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 # ── Palette cohérente ──────────────────────────────────────────────────────
 _AGENT_COLORS = plt.cm.tab10.colors   # jusqu'à 10 agents
 
 
 def _base_fig(title: str, nrows=1, ncols=1, figsize=None):
-    """Helper : crée une figure avec style uniforme."""
+    """Helper : create figure uniforme style ."""
     fig, axes = plt.subplots(nrows, ncols,
                              figsize=figsize or (8 * ncols, 5 * nrows))
     fig.suptitle(title, fontsize=14, fontweight="bold")
@@ -249,9 +274,9 @@ def plot_compute_time(timer: EpochTimer, method_name: str = ""):
              marker="o", markersize=4, label="Cumulatif")
     ax2.fill_between(epochs, timer.cumulative_times,
                      alpha=0.15, color="darkorange")
-    ax2.set_xlabel("Époque")
-    ax2.set_ylabel("Temps cumulatif (s)")
-    ax2.set_title("Temps cumulatif d'entraînement")
+    ax2.set_xlabel("Epoch")
+    ax2.set_ylabel("Cumulatif Time  (s)")
+    ax2.set_title("Cumulatif Time training")
     ax2.legend(fontsize=8)
     ax2.grid(True, alpha=0.3)
 
@@ -485,7 +510,7 @@ def compute_cosine_similarity_matrix(agent_list: list) -> np.ndarray:
     return np.clip(cosine_matrix, -1.0, 1.0)
 
 
-def plot_cosine_similarity(agent_list: list, method_name: str = ""):
+def plot_cosine_similarity(result):
     """
     Affiche la heatmap de similarité cosinus entre tous les agents.
 
@@ -498,9 +523,9 @@ def plot_cosine_similarity(agent_list: list, method_name: str = ""):
         agent_list  : liste des agents
         method_name : label pour le titre
     """
-    n      = len(agent_list)
-    matrix = compute_cosine_similarity_matrix(agent_list)
-    labels = [f"A{a.id}" for a in agent_list]
+    n      = len(result.agent_list)
+    matrix = compute_cosine_similarity_matrix(result.agent_list)
+    labels = [f"A{a.id}" for a in result.agent_list]
 
     # Colormap : blanc=0.5, vert foncé=1.0, rouge=bas
     cmap = LinearSegmentedColormap.from_list(
@@ -508,7 +533,7 @@ def plot_cosine_similarity(agent_list: list, method_name: str = ""):
     )
 
     fig, ax = plt.subplots(figsize=(max(6, n + 1), max(5, n)))
-    fig.suptitle(f"Similarité Cosinus entre agents — {method_name}",
+    fig.suptitle(f"Cosine Similarity Between Agents — {result.method_name}",
                  fontsize=13, fontweight="bold")
 
     im = ax.imshow(matrix, cmap=cmap, vmin=-1.0, vmax=1.0)
@@ -591,7 +616,7 @@ def plot_distance_heatmap(agent_list: list, method_name: str = ""):
     )
 
     fig, ax = plt.subplots(figsize=(max(6, n + 1), max(5, n)))
-    fig.suptitle(f"Heatmap des distances L2 entre agents — {method_name}",
+    fig.suptitle(f"Heatmap of L2 distances between agents — {method_name}",
                  fontsize=13, fontweight="bold")
 
     im = ax.imshow(matrix, cmap=cmap)

@@ -1,6 +1,6 @@
 import threading
 from metrics.Classe_model_metrics import ModelMetrics
-from synchronize_weight import*
+from synchronize_weight_brouillon import*
 import copy
 import threading
 from agents.Classe_agent import Agent
