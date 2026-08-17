@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch
 import copy
+import time
 
 class Agent:
     def __init__(self,
@@ -128,9 +129,10 @@ class Agent:
             self.val_losses.append(val_loss)
             self.val_accuracies.append(val_acc)
 
-            
+            start = time.perf_counter()
             train_loss, train_acc = self.train_one_epoch()
-
+            elapsed = time.perf_counter() - start
+            self.epoch_compute_times.append(elapsed)
             self.train_losses.append(train_loss)
             self.train_accuracies.append(train_acc)
 
@@ -141,75 +143,62 @@ class Agent:
 
             print(f"Erreur agent {self.id} : {e}")
 
-    def communicate(self, other_agent):
-
-        my_weights = self.model.state_dict()
-        other_weights = other_agent.model.state_dict()
-
-        averaged_weights = {}
-
-        for key in my_weights:
-            averaged_weights[key] = (my_weights[key] + other_weights[key]) / 2
-
-        self.model.load_state_dict(averaged_weights)
-        other_agent.model.load_state_dict(averaged_weights)
-
-
     @staticmethod
-    def node_weight_metric(agent_list):
-        total_distance_list = []
+    def node_weight_metric(agent_list: list) -> list[float]:
+        """
+        Calcule la distance euclidienne (norme L2 globale) entre chaque agent
+        et le modèle moyen de tous les agents.
+        Args:
+            agent_list: liste de tous les agents
+
+        Returns:
+            list[float]: distance L2 globale de chaque agent au modèle moyen
+        """
+
+        """
+         Step 1: Compute the average model across all agents.
+         A deep copy is used to create an independent accumulator so that
+         the original model parameters remain unchanged.
+        """
+        
         avg_state_dict = copy.deepcopy(agent_list[0].model.state_dict())
 
-        # moyenne
         for key in avg_state_dict:
-
             for i in range(1, len(agent_list)):
-                avg_state_dict[key] += (
-                    agent_list[i].model.state_dict()[key]
-                )
+                avg_state_dict[key] = avg_state_dict[key] + \
+                                      agent_list[i].model.state_dict()[key]
+            # Division par le nombre total d'agents
+            avg_state_dict[key] = avg_state_dict[key] / len(agent_list)
 
-            avg_state_dict[key] /= len(agent_list)
+        """
+        # Step 2: Compute the global L2 distance between each agent and the
+        # average model.
+        #
+        # The distance is computed as
+        #
+        #     sqrt( Σ ||Δ_layer||² )
+        #
+        # which is equivalent to the Euclidean norm of the concatenated
+        # parameter vector.
+        """
 
-        # différences
-        for agent_id, agent in enumerate(agent_list):
-            total_distance = 0
+        total_distance_list = []
+
+        for agent in agent_list:
+
+            agent_state = agent.model.state_dict()
+            sum_of_squared_norms = 0.0
 
             for key in avg_state_dict:
-                diff = (
-                        avg_state_dict[key]
-                        - agent.model.state_dict()[key]
-                )
+                # Différence param par param pour cette couche
+                diff = avg_state_dict[key] - agent_state[key]
 
-                distance = torch.norm(diff).item()
-                total_distance += distance
+                # ‖diff_layer‖₂² — on accumule le CARRÉ
+                squared_norm = torch.norm(diff).item() ** 2
+                sum_of_squared_norms += squared_norm
+
+            # Racine carrée finale → vraie norme L2 dans l'espace global
+            total_distance = sum_of_squared_norms ** 0.5
             total_distance_list.append(total_distance)
 
         return total_distance_list
-
-    def plot_metrics(self):
-
-        epochs = range(1, len(self.train_losses)+1)
-
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-        # LOSS
-        axes[0].plot(epochs, self.train_losses, label="Train Loss")
-        axes[0].plot(epochs, self.val_losses, label="Validation Loss")
-
-        axes[0].set_title(f"{self.id} Loss")
-        axes[0].set_xlabel("Epoch")
-        axes[0].set_ylabel("Loss")
-        axes[0].legend()
-
-        # ACCURACY
-        axes[1].plot(epochs, self.val_accuracies, label="Val accuracies")
-        axes[1].plot(epochs, self.train_accuracies, label="Train accuracies")
-
-
-        axes[1].set_title(f"{self.id} Accuracy")
-        axes[1].set_xlabel("Epoch")
-        axes[1].set_ylabel("Accuracy (%)")
-        axes[1].legend()
-
-        #plt.tight_layout()
-        plt.show()
