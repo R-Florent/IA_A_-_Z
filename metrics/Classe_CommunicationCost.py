@@ -10,6 +10,7 @@ import matplotlib.ticker as mticker
 from dataclasses import dataclass, field
 from typing import Optional
 
+
 from sympy.codegen.ast import none
 
 
@@ -38,6 +39,7 @@ class EpochCommunicationSnapshot:
     total_bytes        : float
     sync_time_ms       : float
     n_agents           : int
+    source             : str
 
     @property
     def total_mb(self) -> float:
@@ -90,12 +92,10 @@ class CommunicationCostMetric:
         """
         self.method_name  = method_name
         self.n_agents     = len(agent_list)
-        self.graph = graph
+        self.graph        = graph
 
         # Compte les paramètres scalaires du modèle d'un agent
-        self.n_params = int(sum(
-            p.numel() for p in agent_list[0].model.parameters()
-        ))
+        self.n_params = int(sum(p.numel() for p in agent_list[0].model.parameters()))
 
         # float32 = 4 octets par paramètre
         self.bytes_per_param = 4
@@ -106,7 +106,10 @@ class CommunicationCostMetric:
         # Accuracy finale (renseignée après le run via set_final_accuracy)
         self._final_accuracy: Optional[float] = None
 
-        self._epoch_n_messages: int | None = None
+#        self._epoch_n_messages: int | None = None
+
+        self._epoch_n_messages : Optional[int] = None   # set par communication_fn
+        self._last_source      : str = "fallback"       # traçabilité debu
 
     def set_epoch_messages(self, n_messages: int):
         """
@@ -116,6 +119,7 @@ class CommunicationCostMetric:
         Exemple dans communication_fn :
             comm_cost.set_epoch_messages(n_agents * k)
         """
+        print(f"[DEBUG] set_epoch_messages called → {n_messages} messages")
         self._epoch_n_messages = n_messages
 
     def _count_messages_from_graph(self) -> int:
@@ -144,6 +148,8 @@ class CommunicationCostMetric:
         Calcule et enregistre les métriques de coût pour une époque.
         n_messages est calculé depuis la topologie réelle du graphe.
         """
+        n_messages = self._resolve_n_messages()
+        print(f"[DEBUG] _record epoch={epoch} → n_messages={n_messages}")
         n_messages         = self._resolve_n_messages()
         params_per_message = self.n_params
         bytes_per_message  = params_per_message * self.bytes_per_param
@@ -157,6 +163,7 @@ class CommunicationCostMetric:
             total_bytes        = total_bytes,
             sync_time_ms       = sync_time_ms,
             n_agents           = self.n_agents,
+            source             = self._last_source,
         )
         self.snapshots.append(snap)
 
@@ -220,6 +227,7 @@ class CommunicationCostMetric:
     # ──────────────────────────────────────────────────────────────────────
 
     def _resolve_n_messages(self) -> int:
+        print(f"[DEBUG] _resolve_n_messages → _epoch_n_messages = {self._epoch_n_messages}")
         """
         Résout le nombre de messages selon la priorité :
             1. Valeur déclarée par set_epoch_messages()   ← précis
