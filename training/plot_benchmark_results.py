@@ -1,6 +1,7 @@
 # benchmark/plot_benchmark.py
 import copy
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class RunResult:
@@ -59,9 +60,7 @@ def plot_benchmark_results(results: list[RunResult], metric: str = "val_loss"):
 
 
 def plot_all_benchmark_metrics(results: list[RunResult]):
-    """
-    Trace les 4 métriques en une seule figure (2x2).
-    """
+
     fig, axes = plt.subplots(2, 2, figsize=(16, 10))
     fig.suptitle("Benchmark des méthodes de communication décentralisée", fontsize=14)
 
@@ -105,54 +104,85 @@ def print_benchmark_summary(results: list[RunResult]):
 
 
 
-# ──────────────────────────────────────────────────────────────
-# Benchmark séquentiel
-# ──────────────────────────────────────────────────────────────
-
-def benchmark_sequential(
-    communication_methods: dict,   # {"nom": fn, ...}
-    num_epochs: int,
-    graph,
-    k: int,
-    BATCH_SIZE: int,
-    N_AGENT: int,
-    DEVICE,
-) -> list[RunResult]:
+def plot_communication_comparison(results: list[RunResult]):
     """
-    Entraîne chaque méthode l'une après l'autre.
-    Les agents sont RÉINITIALISÉS entre chaque méthode pour une comparaison équitable.
+    Compare the communication cost of all decentralized FL methods.
+
+    Two plots are generated:
+        1. Number of messages exchanged at each epoch.
+        2. Cumulative number of messages exchanged over training.
 
     Args:
-        communication_methods: dict {label: fn} — ex. {"average": synchronize_models_average}
-        num_epochs:            nombre d'époques par run
-        graph:                 topologie réseau (NetworkX graph)
-        k:                     paramètre K pour consensu_algortyme
-        BATCH_SIZE:            taille du batch
-        N_AGENT:               nombre d'agents
-        DEVICE:                torch.device
-
-    Returns:
-        Liste de RunResult (un par méthode)
+        results: list of RunResult objects. Each result must contain
+                 a CommunicationCostMetric in `result.comm_cost`.
     """
-    results: list[RunResult] = []
 
-    for method_name, communication_fn in communication_methods.items():
-        print(f"\n{'='*60}")
-        print(f"  RUN — méthode : {method_name}")
-        print(f"{'='*60}")
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-        # ── Agents frais à chaque run ──────────────────────────────
-        agent_list = genereate_agent(BATCH_SIZE, N_AGENT, DEVICE)
+    fig.suptitle(
+        "Communication Cost Benchmark",
+        fontsize=14
+    )
 
-        metrics = _train_agent_run(agent_list, num_epochs, graph, k, communication_fn)
+    for result in results:
 
-        result = RunResult(
-            method_name=method_name,
-            agent_list=agent_list,
-            metrics=metrics,
+        comm = result.comm_cost
+        snapshots = comm.snapshots
+
+        # Messages exchanged during each epoch
+        messages_per_epoch = [
+            snapshot.n_messages
+            for snapshot in snapshots
+        ]
+
+        # Cumulative number of messages
+        cumulative_messages = np.cumsum(messages_per_epoch)
+
+        epochs = range(1, len(messages_per_epoch) + 1)
+
+        # ─────────────────────────────────────────────
+        # Messages per epoch
+        # ─────────────────────────────────────────────
+
+        axes[0].plot(
+            epochs,
+            messages_per_epoch,
+            label=result.method_name,
+            marker="o",
+            markersize=3
         )
-        results.append(result)
-        print(result)
-        print("result")
 
-    return results
+        # ─────────────────────────────────────────────
+        # Cumulative messages
+        # ─────────────────────────────────────────────
+
+        axes[1].plot(
+            epochs,
+            cumulative_messages,
+            label=result.method_name,
+            marker="o",
+            markersize=3
+        )
+
+    # ─────────────────────────────────────────────────
+    # Plot 1
+    # ─────────────────────────────────────────────────
+
+    axes[0].set_title("Messages per Epoch")
+    axes[0].set_xlabel("Epoch")
+    axes[0].set_ylabel("Number of Messages")
+    axes[0].legend(fontsize=8)
+    axes[0].grid(True, alpha=0.3)
+
+    # ─────────────────────────────────────────────────
+    # Plot 2
+    # ─────────────────────────────────────────────────
+
+    axes[1].set_title("Cumulative Communication Messages")
+    axes[1].set_xlabel("Epoch")
+    axes[1].set_ylabel("Cumulative Number of Messages")
+    axes[1].legend(fontsize=8)
+    axes[1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
