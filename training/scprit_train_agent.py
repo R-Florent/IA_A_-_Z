@@ -6,8 +6,10 @@ import threading
 from agents.Classe_agent import Agent
 from metrics.Classe_model_metrics import ModelMetrics
 from metrics.metrics import (log_weight_std,log_distance_to_mean,EpochTimer)
+from scrpit_generate_agent import generate_agent
+from metrics.Classe_RunResult import RunResult
 
-
+"""
 def train_agent(agent_list,num_epochs,graph,k,communication_model):
 
     metrics = ModelMetrics(agent_list)
@@ -82,3 +84,40 @@ def train_agent_chrono(agent_list, num_epochs, graph, k, communication_fn) -> tu
 
     print("Les modèles ont fini l'entraînement")
     return metrics, timer
+
+
+
+def _train_agent_run(agent_list, num_epochs, graph, k, communication_fn) -> object:
+    Entraîne agent_list pendant num_epochs avec communication_fn.
+    Retourne l'objet ModelMetrics loggé.
+
+    metrics = ModelMetrics(agent_list)
+
+    for epoch in range(num_epochs):
+
+        # ── Entraînement parallèle (thread par agent) ──────────────
+        threads = [
+            threading.Thread(target=agent.train_and_validate, args=[agent_list])
+            for agent in agent_list
+        ]
+        for t in threads:
+            t.start()
+
+        print(f"  [Epoch {epoch + 1}/{num_epochs}] threads lancés …")
+
+        for t in threads:
+            t.join()
+
+        # ── Distance inter-agents ──────────────────────────────────
+        distances = Agent.node_weight_metric(agent_list)
+        for agent, dist in zip(agent_list, distances):
+            agent.total_distance_list.append(dist)
+
+        # ── Synchronisation selon la méthode choisie ───────────────
+        communication_fn(agent_list, graph, k)
+
+        metrics.log_metrics(epoch)
+
+    print("  ✓ Entraînement terminé\n")
+    return metrics
+"""
