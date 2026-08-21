@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from training.benchmark import RunResult
-
+import numpy as np
+import matplotlib.ticker as ticker
 
 def plot_benchmark_results(results: list[RunResult], metric: str = "val_loss"):
     """

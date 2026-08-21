@@ -1,21 +1,17 @@
 import copy
-import matplotlib.pyplot as plt
-import torch
-from metrics.Classe_EpochTimer import EpochTimer
-
-import time
-import copy
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+
 from matplotlib.colors import LinearSegmentedColormap
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 
-from agents.Classe_agent import Agent
+import matplotlib.ticker as ticker
 
+from metrics.Classe_RunResult import RunResult
+#from metrics.Classe_RunResult import RunResult
 # ══════════════════════════════════════════════════════════════════════════════
 # PLOTS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1052,4 +1048,276 @@ def plot_full_metric_dashboard(agent_list: list, method_name: str = "",
     # Finalisation
     # ══════════════════════════════════════════════════════════════
     plt.tight_layout(rect=[0, 0, 1, 0.96])  # laisse la place au suptitle
+    plt.show()
+
+
+
+# PURPOSE
+# -------
+# Visualises per-epoch and cumulative wall-clock training time
+# across multiple communication methods stored in a list of RunResult.
+#
+# FUNCTIONS
+# ---------
+#   plot_epoch_times       — per-epoch duration  (one line per method)
+#   plot_cumulative_times  — cumulative duration  (one line per method)
+#
+# USAGE
+# -----
+#   from metrics.plot_epoch_timing import plot_epoch_times, plot_cumulative_times
+#
+#   plot_epoch_times(results)
+#   plot_cumulative_times(results)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INTERNAL HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Consistent colour palette — up to 10 methods
+_COLORS = plt.cm.tab10.colors
+
+# Marker cycle so lines stay distinguishable even in greyscale / print
+_MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*", "h", "<"]
+
+def _base_axes(title: str, xlabel: str, ylabel: str,
+               figsize: tuple = (11, 5)) -> tuple:
+    """
+    Creates a styled figure and axes with a consistent look.
+
+    Returns:
+        (fig, ax)
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.grid(True, linestyle="--", alpha=0.4)
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+    return fig, ax
+
+def _epoch_axis(ax, n_epochs: int) -> None:
+    """
+    Forces x-axis ticks to be 1-based integers (Epoch 1 … Epoch N).
+    """
+    ax.set_xticks(range(1, n_epochs + 1))
+
+def _add_summary_table(ax, results: list[RunResult]) -> None:
+    """
+    Draws a small text box in the upper-left corner of ax summarising
+    total time and mean time per epoch for every method.
+
+    Format per row :
+        MethodName  |  total=Xs  |  mean=Xs/ep
+    """
+    lines = []
+    for r in results:
+        lines.append(
+            f"{r.method_name:<22}"
+            f"total={r.timer.total_time:6.1f}s  "
+            f"mean={r.timer.mean_epoch_time:5.2f}s/ep"
+        )
+
+    box_text = "\n".join(lines)
+    ax.text(
+        0.01, 0.99, box_text,
+        transform=ax.transAxes,
+        fontsize=8,
+        verticalalignment="top",
+        fontfamily="monospace",
+        bbox=dict(boxstyle="round,pad=0.4",
+                  facecolor="white",
+                  edgecolor="grey",
+                  alpha=0.85),
+    )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. PER-EPOCH DURATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+def plot_epoch_times(
+        results: list[RunResult],
+        method_name: str = "",
+        show_mean: bool = True,
+        figsize: tuple = (11, 5),
+) -> None:
+    """
+    Plots the wall-clock duration of EACH EPOCH for every communication
+    method stored in results.
+
+    X-axis : epoch number  (1-based)
+    Y-axis : duration in seconds
+
+    Each method is drawn as a coloured line with markers.
+    An optional dashed horizontal line shows the per-method mean duration.
+    A summary box (top-left) lists total and mean times for quick comparison.
+
+    Args:
+        results     : list of RunResult — one entry per communication method.
+        method_name : optional subtitle appended to the figure title.
+        show_mean   : if True, draws a dashed horizontal mean line per method.
+        figsize     : matplotlib figure size.
+
+    Example:
+        plot_epoch_times(results, method_name="MNIST experiment")
+    """
+    if not results:
+        print("[plot_epoch_times] Empty results list — nothing to plot.")
+        return
+
+    n_epochs = len(results[0].timer.epoch_times)
+    epochs = list(range(1, n_epochs + 1))  # [1, 2, …, N]
+    suffix = f" — {method_name}" if method_name else ""
+
+    fig, ax = _base_axes(
+        title=f"Per-Epoch Training Time{suffix}",
+        xlabel="Epoch",
+        ylabel="Duration (s)",
+        figsize=figsize,
+    )
+
+    for idx, result in enumerate(results):
+        color = _COLORS[idx % len(_COLORS)]
+        marker = _MARKERS[idx % len(_MARKERS)]
+        times = result.timer.epoch_times
+
+        # ── Main line ─────────────────────────────────────────────
+        ax.plot(
+            epochs, times,
+            label=result.method_name,
+            color=color,
+            marker=marker,
+            linewidth=2,
+            markersize=6,
+            zorder=3,
+        )
+
+        # ── Fastest / slowest epoch markers ───────────────────────
+        fast_i, fast_t = result.timer.fastest_epoch  # (1-based index, time)
+        slow_i, slow_t = result.timer.slowest_epoch
+
+        ax.scatter(fast_i, fast_t,
+                   color="green", s=90, zorder=5,
+                   edgecolors="black", linewidths=0.8)
+        ax.scatter(slow_i, slow_t,
+                   color="red", s=90, zorder=5,
+                   edgecolors="black", linewidths=0.8)
+
+        # ── Optional mean line ────────────────────────────────────
+        if show_mean:
+            mean_t = result.timer.mean_epoch_time
+            ax.axhline(
+                mean_t,
+                color=color,
+                linestyle="--",
+                linewidth=1.2,
+                alpha=0.55,
+                label=f"{result.method_name} mean ({mean_t:.2f}s)",
+            )
+
+    # ── Legend for fastest / slowest markers ──────────────────────
+    fast_patch = plt.scatter([], [], color="green", s=70,
+                             edgecolors="black", label="Fastest epoch")
+    slow_patch = plt.scatter([], [], color="red", s=70,
+                             edgecolors="black", label="Slowest epoch")
+
+    _epoch_axis(ax, n_epochs)
+    _add_summary_table(ax, results)
+
+    ax.legend(fontsize=9, loc="upper right")
+    plt.tight_layout()
+    plt.show()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. CUMULATIVE DURATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+def plot_cumulative_times(
+        results: list[RunResult],
+        method_name: str = "",
+        figsize: tuple = (11, 5),
+) -> None:
+    """
+    Plots the CUMULATIVE wall-clock time after each epoch for every
+    communication method stored in results.
+
+    X-axis : epoch number  (1-based)
+    Y-axis : cumulative time in seconds
+
+    A steeper slope means the method spends more time per epoch.
+    Methods whose lines converge at the end have similar total costs.
+    A shaded band between the fastest and slowest method is drawn when
+    there are at least two methods, making the spread immediately visible.
+
+    Args:
+        results     : list of RunResult — one entry per communication method.
+        method_name : optional subtitle appended to the figure title.
+        figsize     : matplotlib figure size.
+
+    Example:
+        plot_cumulative_times(results, method_name="MNIST experiment")
+    """
+    if not results:
+        print("[plot_cumulative_times] Empty results list — nothing to plot.")
+        return
+
+    n_epochs = len(results[0].timer.cumulative_times)
+    epochs = list(range(1, n_epochs + 1))
+    suffix = f" — {method_name}" if method_name else ""
+
+    fig, ax = _base_axes(
+        title=f"Cumulative Training Time{suffix}",
+        xlabel="Epoch",
+        ylabel="Cumulative Time (s)",
+        figsize=figsize,
+    )
+
+    all_cumulative: list[list[float]] = []
+
+    for idx, result in enumerate(results):
+        color = _COLORS[idx % len(_COLORS)]
+        marker = _MARKERS[idx % len(_MARKERS)]
+        ctimes = result.timer.cumulative_times
+        all_cumulative.append(ctimes)
+
+        ax.plot(
+            epochs, ctimes,
+            label=f"{result.method_name}  (total={result.timer.total_time:.1f}s)",
+            color=color,
+            marker=marker,
+            linewidth=2.2,
+            markersize=6,
+            zorder=3,
+        )
+
+        # Annotate the final cumulative value at the last epoch
+        ax.annotate(
+            f"{ctimes[-1]:.1f}s",
+            xy=(epochs[-1], ctimes[-1]),
+            xytext=(6, 0),
+            textcoords="offset points",
+            fontsize=9,
+            color=color,
+            fontweight="bold",
+            va="center",
+        )
+
+    # ── Shaded spread band (min … max across methods) ─────────────
+    if len(all_cumulative) >= 2:
+        arr = np.array(all_cumulative)  # (n_methods, n_epochs)
+        min_vals = arr.min(axis=0)
+        max_vals = arr.max(axis=0)
+
+        ax.fill_between(
+            epochs, min_vals, max_vals,
+            alpha=0.10,
+            color="grey",
+            label="Spread (min – max)",
+            zorder=1,
+        )
+
+    _epoch_axis(ax, n_epochs)
+    _add_summary_table(ax, results)
+
+    ax.legend(fontsize=9, loc="upper left")
+    plt.tight_layout()
     plt.show()
