@@ -1,10 +1,13 @@
 import copy
+
+from sympy.codegen.ast import none
+
 from agents.Classe_agent import Agent
 from topologies.NetworkTopology import NetworkTopology
 from hyperparametres import NUM_EPOCHES
 
 
-def Sequential_AC(agent_list, graph):
+def Sequential_AC(agent_list, graph,comm_cost):
     """
     Sequential Pairwise Averaging (Sequential Gossip Protocol).
 
@@ -60,6 +63,11 @@ def Sequential_AC(agent_list, graph):
     O(N * D * avg_degree) where N = number of agents, D = number of
     parameters per model.
     """
+
+    total_messages = sum(dict(graph.degree()).values())  # = nb_arêtes × 2
+    comm_cost.set_epoch_messages(total_messages)
+
+
     for agent in agent_list:
         neighbors_ids = NetworkTopology.get_neighbors(graph, agent.id)
 
@@ -77,7 +85,7 @@ def Sequential_AC(agent_list, graph):
             agent.model.load_state_dict(averaged)
 
 
-def consensus_step(agent_list, graph):
+def consensus_step(agent_list, graph,comm_cost=none):
     """
     Synchronous Local Averaging — One Step of Average Consensus.
 
@@ -148,6 +156,10 @@ def consensus_step(agent_list, graph):
     average with already-updated neighbors, breaking the synchronous
     guarantee.
     """
+    if comm_cost is not None:
+        total_messages = sum(dict(graph.degree()).values())  # = nb_arêtes × 2
+        comm_cost.set_epoch_messages(total_messages)
+
     new_weights = {}
 
     # ── Phase 1 : compute all new weight vectors (no model is touched yet)
@@ -175,7 +187,7 @@ def consensus_step(agent_list, graph):
         agent.model.load_state_dict(new_weights[agent.id])
 
 
-def Average_consensus_algorithm(agent_list, graph, K=5):
+def Average_consensus_algorithm(agent_list, graph, K=5,comm_cost=none):
     """
     Iterative Average Consensus over K rounds (Synchronous Gossip).
 
@@ -250,6 +262,10 @@ def Average_consensus_algorithm(agent_list, graph, K=5):
         D          = total number of model parameters
         avg_degree = average number of neighbors per agent
     """
+    if comm_cost is not None:
+        messages_per_iteration = sum(dict(graph.degree()).values())
+        comm_cost.set_epoch_messages(messages_per_iteration * K)
+
     # Snapshot initial weights
     r = {
         agent_id: copy.deepcopy(agent.model.state_dict())
@@ -289,7 +305,7 @@ def Average_consensus_algorithm(agent_list, graph, K=5):
     return r
 
 
-def avg_models_algorithm(agent_list):
+def avg_models_algorithm(agent_list,comm_cost=none):
     """
     Centralized Federated Averaging (FedAvg — Global Aggregation Step).
 
@@ -341,6 +357,11 @@ def avg_models_algorithm(agent_list):
     (the original FedAvg formulation), replace the uniform average with:
         w_global = Σ_i (n_i / n_total) * w_i
     """
+    n = len(agent_list)
+
+    if comm_cost is not None:
+        comm_cost.set_epoch_messages(n * 2)  # upload + download par agent
+
     # Start with a deep copy of the first agent's weights
     avg_state_dict = copy.deepcopy(agent_list[0].model.state_dict())
 
@@ -356,7 +377,7 @@ def avg_models_algorithm(agent_list):
         agent.model.load_state_dict(avg_state_dict)
 
 
-def Hamiltonian_cycle_algorithm(agent_list):
+def Hamiltonian_cycle_algorithm(agent_list,comm_cost):
     """
     Hamiltonian Cycle Weight Rotation (Ring-Topology Model Passing).
 
@@ -418,6 +439,10 @@ def Hamiltonian_cycle_algorithm(agent_list):
     update, ensuring the rotation is truly simultaneous. Without this,
     agent[1] would receive already-updated weights from agent[0].
     """
+    n = len(agent_list)
+    if comm_cost is not None:
+        comm_cost.set_epoch_messages(n * 1)  # 1 message reçu par agent
+
     # Snapshot all weights before any modification
     state_dict_list = [
         copy.deepcopy(agent.model.state_dict())
@@ -434,7 +459,7 @@ def Hamiltonian_cycle_algorithm(agent_list):
 count_epoches = 0
 
 
-def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list, K, epoch, num_epochs):
+def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list, K, epoch, num_epochs,comm_cost=None):
     """
     Hybrid Strategy: Hamiltonian Rotation + Final Average Consensus.
 
@@ -522,6 +547,8 @@ def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list, K, epoch, num_epoc
     if epoch < num_epochs - 2:
         # ── Phase 1 : Hamiltonian rotation ────────────────────────────────
         print("    [Hybrid] Phase 1 — Hamiltonian rotation …")
+        if comm_cost is not None:
+            comm_cost.set_epoch_messages(n)
         snapshots = [
             copy.deepcopy(agent.model.state_dict())
             for agent in agent_list
@@ -531,8 +558,15 @@ def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list, K, epoch, num_epoc
             predecessor = (i - 1) % n
             agent.model.load_state_dict(snapshots[predecessor])
 
+
     else:
         # ── Phase 2 : Average consensus on the ring ────────────────────────
         print("    [Hybrid] Phase 2 — Average consensus on Hamiltonian ring …")
-        r = Average_consensus_algorithm(agent_list, hamil_graph, K=K)
+
+        r = Average_consensus_algorithm(
+            agent_list,
+            hamil_graph,
+            K=K,
+            comm_cost=comm_cost
+        )
         return r
