@@ -15,11 +15,10 @@ def benchmark_sequential(
     k                     : int,
     BATCH_SIZE            : int,
     N_AGENT               : int,
-    DEVICE,
-) -> tuple[list[RunResult], CommunicationCostComparator]:
+    DEVICE,) -> tuple[list[RunResult], CommunicationCostComparator]:
 
     results    = []
-    comparator = CommunicationCostComparator()   # ← 1 seule instance
+    comparator = CommunicationCostComparator()
 
     for method_name, communication_fn in communication_methods.items():
         print(f"\n{'='*60}\n  RUN — méthode : {method_name}\n{'='*60}")

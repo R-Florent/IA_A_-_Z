@@ -150,8 +150,9 @@ class CommunicationCostMetric:
         """
         n_messages = self._resolve_n_messages()
         print(f"[DEBUG] _record epoch={epoch} → n_messages={n_messages}")
-        n_messages         = self._resolve_n_messages()
+
         params_per_message = self.n_params
+
         bytes_per_message  = params_per_message * self.bytes_per_param
         total_bytes        = n_messages * bytes_per_message
 

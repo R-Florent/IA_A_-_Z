@@ -1,9 +1,10 @@
 import copy
 
 from sympy.codegen.ast import none
-
 from agents.Classe_agent import Agent
 from topologies.NetworkTopology import NetworkTopology
+import copy
+import torch
 from hyperparametres import NUM_EPOCHES
 
 
@@ -32,7 +33,7 @@ def Sequential_AC(agent_list, graph,comm_cost):
 
     ⚠️ Note on asymmetry
     --------------------
-    Because only `agent` is updated (not `neighbor`), the mixing matrix
+    Because only `agent` is updated (not `neighbor`), the mixing m          atrix
     is row-stochastic but not column-stochastic. This breaks the
     sum-preserving property of average consensus. Consider using
     `consensus_step` for a symmetric, theoretically grounded update.
@@ -85,7 +86,7 @@ def Sequential_AC(agent_list, graph,comm_cost):
             agent.model.load_state_dict(averaged)
 
 
-def consensus_step(agent_list, graph,comm_cost=none):
+def Average_consensus_algorithm(agent_list, graph, comm_cost=none):
     """
     Synchronous Local Averaging — One Step of Average Consensus.
 
@@ -187,7 +188,7 @@ def consensus_step(agent_list, graph,comm_cost=none):
         agent.model.load_state_dict(new_weights[agent.id])
 
 
-def Average_consensus_algorithm(agent_list, graph, K=5,comm_cost=none):
+def Average_consensus_algorithm_K(agent_list, graph, K=5, comm_cost=none):
     """
     Iterative Average Consensus over K rounds (Synchronous Gossip).
 
@@ -305,9 +306,10 @@ def Average_consensus_algorithm(agent_list, graph, K=5,comm_cost=none):
     return r
 
 
-def avg_models_algorithm(agent_list,comm_cost=none):
+def avg_models_fully_connected_graph_algorithm(agent_list,comm_cost=none):
     """
-    Centralized Federated Averaging (FedAvg — Global Aggregation Step).
+    Centralize
+    d Federated Averaging (FedAvg — Global Aggregation Step).
 
     Computes the exact arithmetic mean of all agents' model weights
     and broadcasts the result to every agent. This is the canonical
@@ -563,10 +565,406 @@ def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list, K, epoch, num_epoc
         # ── Phase 2 : Average consensus on the ring ────────────────────────
         print("    [Hybrid] Phase 2 — Average consensus on Hamiltonian ring …")
 
-        r = Average_consensus_algorithm(
+        r = Average_consensus_algorithm_K(
             agent_list,
             hamil_graph,
             K=K,
             comm_cost=comm_cost
         )
         return r
+
+def _metropolis_weights(graph, n):
+    """
+    Compute the Metropolis-Hastings Optimal Mixing Matrix.
+
+    Mathematical Foundation
+    -----------------------
+    The speed of ANY consensus algorithm depends on λ₂(W),
+    the second largest eigenvalue of the mixing matrix W.
+    The smaller λ₂, the faster the convergence.
+
+    The Metropolis-Hastings rule gives a simple CLOSED-FORM doubly
+    stochastic matrix that near-optimally minimizes λ₂:
+
+        W_ij = 1 / (1 + max(deg(i), deg(j)))   if (i,j) ∈ E
+        W_ii = 1 - Σ_{j ∈ N_i} W_ij            (self-weight)
+        W_ij = 0                                 otherwise
+
+    Analogy:
+        If two neighbors have different numbers of friends, the one
+        with MORE friends gives LESS weight to each connection.
+        This balances the influence and creates a doubly stochastic W
+        without any global coordination — each agent only needs to
+        know its own degree and its neighbor's degree.
+
+    Reference
+    ---------
+    Xiao, L., Boyd, S. (2004). "Fast linear iterations for distributed
+    averaging." Systems & Control Letters.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+    n     : int, number of agents
+
+    Returns
+    -------
+    W : dict[int, dict[int, float]]
+        Mixing matrix as nested dict. W[i][j] = weight agent i gives
+        to agent j's model.
+    """
+    import networkx as nx
+
+    W = {i: {j: 0.0 for j in range(n)} for i in range(n)}
+
+    for i in range(n):
+        neighbors = list(graph.neighbors(i))
+        for j in neighbors:
+            deg_i = graph.degree(i)
+            deg_j = graph.degree(j)
+            W[i][j] = 1.0 / (1 + max(deg_i, deg_j))
+        # Self-weight: 1 - sum of outgoing weights
+        W[i][i] = 1.0 - sum(W[i][j] for j in neighbors)
+
+    return W
+
+def push_sum_consensus(agent_list, graph, K=10):
+    """
+    Push-Sum Consensus Algorithm for Directed Graphs.
+
+    Mathematical Foundation
+    -----------------------
+    Standard averaging (DSGD) requires a SYMMETRIC, doubly stochastic
+    matrix W. This breaks on directed graphs (e.g., agent A → B but
+    not B → A).
+
+    Push-Sum solves this by tracking two quantities per agent:
+        - x_i(t) : weighted sum of model weights
+        - w_i(t) : scalar weight (sum of mixing coefficients received)
+
+    The ratio x_i(t) / w_i(t) converges to the global average:
+
+        x_i(t+1) = Σ_{j: j→i}  (x_j(t) / out_degree(j))
+        w_i(t+1) = Σ_{j: j→i}  (w_j(t) / out_degree(j))
+
+        estimate_i(t) = x_i(t) / w_i(t)  →  (1/N) Σ_i x_i(0)
+
+    Key property: works even if W is only COLUMN-stochastic
+    (each agent distributes its full mass to neighbors).
+
+    Reference
+    ---------
+    Kempe, D., Dobra, A., Gehrke, J. (2003). FOCS.
+    Nedic, A., Olshevsky, A. (2015). IEEE Trans. Automatic Control.
+
+    Parameters
+    ----------
+    agent_list : list[Agent]
+    graph      : networkx.DiGraph  ← directed graph!
+    K          : int, number of iterations
+
+    Returns
+    -------
+    None — agents updated in-place with converged estimates.
+    """
+    n = len(agent_list)
+
+    # Initialize: x_i = model weights, w_i = 1.0 (scalar per agent)
+    x = {
+        agent.id: copy.deepcopy(agent.model.state_dict())
+        for agent in agent_list
+    }
+    w = {agent.id: 1.0 for agent in agent_list}
+
+    for k in range(K):
+        x_new = {agent.id: None for agent in agent_list}
+        w_new = {agent.id: 0.0 for agent in agent_list}
+
+        for agent in agent_list:
+            # Each agent splits its mass equally among out-neighbors + self
+            out_neighbors = list(graph.successors(agent.id))
+            recipients = [agent.id] + out_neighbors
+            share = 1.0 / len(recipients)
+
+            for recipient_id in recipients:
+                # Accumulate x contribution
+                contrib = {
+                    key: x[agent.id][key] * share
+                    for key in x[agent.id]
+                }
+                if x_new[recipient_id] is None:
+                    x_new[recipient_id] = contrib
+                else:
+                    for key in contrib:
+                        x_new[recipient_id][key] += contrib[key]
+
+                # Accumulate w contribution
+                w_new[recipient_id] += w[agent.id] * share
+
+        x = x_new
+        w = w_new
+
+        # Compute estimates x_i / w_i and apply to models
+        for agent in agent_list:
+            estimate = {
+                key: x[agent.id][key] / w[agent.id]
+                for key in x[agent.id]
+            }
+            agent.model.load_state_dict(estimate)
+
+        print(f"    [Push-Sum] iter {k+1}/{K} — "
+              f"w_sum = {sum(w.values()):.4f} (should stay ≈ {float(n):.1f})")
+
+    return x, w
+
+
+def gradient_tracking_consensus(agent_list, graph, local_grad_fn, K=10, lr=0.01):
+    """
+    Gradient Tracking Consensus (DIGing / NEXT Algorithm).
+
+    THE KEY PROBLEM THIS SOLVES
+    ---------------------------
+    Standard DSGD / average consensus only averages MODEL WEIGHTS.
+    With non-IID data (each agent has different data distribution),
+    the local gradients point in different directions.
+
+    After averaging weights, each agent computes a gradient biased
+    toward its own local data → the global model drifts away from
+    the TRUE global optimum. This is called "gradient bias" or
+    "client drift".
+
+    Mathematical Foundation
+    -----------------------
+    Gradient Tracking maintains an auxiliary variable y_i that
+    TRACKS the average gradient across all agents:
+
+        Model update:
+            x_i(t+1) = Σ_j W_ij · x_j(t) - lr · y_i(t)
+
+        Gradient tracker update:
+            y_i(t+1) = Σ_j W_ij · y_j(t)
+                       + ∇f_i(x_i(t+1)) - ∇f_i(x_i(t))
+
+    Intuition:
+        y_i(t) is a "gradient memory" — it accumulates the difference
+        between the new and old local gradients. Over iterations,
+        y_i converges to the AVERAGE gradient (1/N) Σ_i ∇f_i(x).
+
+        This makes each agent effectively descend along the GLOBAL
+        gradient, not just its local one → exact convergence even
+        with heterogeneous data.
+
+    Key result (Nedic et al., 2017):
+        With gradient tracking, the algorithm converges to the EXACT
+        global optimum (not just a biased neighborhood of it).
+
+    This is the main advantage over plain DSGD, which only finds
+    an approximation when data is heterogeneous.
+
+    Reference
+    ---------
+    - Nedic, A., Olshevsky, A., Shi, W. (2017). "Achieving geometric
+      convergence for distributed optimization over time-varying
+      graphs." SIAM J. Optimization.
+    - Lorenzo, P.D., Scutari, G. (2016). "NEXT: In-network nonconvex
+      optimization." IEEE Trans. Signal & Info. Processing over Networks.
+    - Koloskova, A. et al. (2021). "An improved analysis of gradient
+      tracking for decentralized ML." NeurIPS 2021.
+
+    Parameters
+    ----------
+    agent_list     : list[Agent]
+    graph          : networkx.Graph (undirected, connected)
+    local_grad_fn  : callable(agent) → dict[str, Tensor]
+                     Function that computes the local gradient for one
+                     agent and returns it as a state-dict-like dict.
+                     Example:
+                         def local_grad_fn(agent):
+                             loss = criterion(agent.model(X), y)
+                             loss.backward()
+                             return {n: p.grad.clone()
+                                     for n, p in agent.model.named_parameters()}
+    K              : int, number of iterations
+    lr             : float, learning rate
+
+    Returns
+    -------
+    None — agents updated in-place.
+    """
+    n = len(agent_list)
+
+    # Build mixing matrix W (Metropolis-Hastings weights — see algo 4)
+    W = _metropolis_weights(graph, n)
+
+    # Initialize gradient trackers y_i = ∇f_i(x_i(0))
+    y = {
+        agent.id: local_grad_fn(agent)
+        for agent in agent_list
+    }
+
+    for k in range(K):
+
+        # ── Step 1 : gradient step using tracked gradient ──────────────
+        old_grads = {
+            agent.id: local_grad_fn(agent)
+            for agent in agent_list
+        }
+
+        # Model update: x_i ← Σ_j W_ij x_j - lr * y_i
+        x_new = {}
+        for agent in agent_list:
+            # Weighted sum of neighbor models
+            mixed = {
+                key: torch.zeros_like(agent.model.state_dict()[key])
+                for key in agent.model.state_dict()
+            }
+            for other in agent_list:
+                wij = W[agent.id][other.id]
+                if wij > 0:
+                    for key in mixed:
+                        mixed[key] += wij * other.model.state_dict()[key]
+
+            # Subtract gradient tracker contribution
+            for key in mixed:
+                if key in y[agent.id]:
+                    mixed[key] -= lr * y[agent.id][key]
+
+            x_new[agent.id] = mixed
+
+        # Apply new model weights
+        for agent in agent_list:
+            agent.model.load_state_dict(x_new[agent.id])
+
+        # ── Step 2 : update gradient trackers ─────────────────────────
+        new_grads = {
+            agent.id: local_grad_fn(agent)
+            for agent in agent_list
+        }
+
+        y_new = {}
+        for agent in agent_list:
+            # Weighted sum of neighbor trackers
+            y_mixed = {
+                key: torch.zeros_like(y[agent.id][key])
+                for key in y[agent.id]
+            }
+            for other in agent_list:
+                wij = W[agent.id][other.id]
+                if wij > 0:
+                    for key in y_mixed:
+                        y_mixed[key] += wij * y[other.id][key]
+
+            # Add gradient correction: ∇f_i(new) - ∇f_i(old)
+            for key in y_mixed:
+                y_mixed[key] += new_grads[agent.id][key] - old_grads[agent.id][key]
+
+            y_new[agent.id] = y_mixed
+
+        y = y_new
+
+        print(f"    [GradTrack] iteration {k+1}/{K} complete")
+
+
+def exact_diffusion_consensus(agent_list, graph, K=10):
+    """
+    Exact Diffusion (D² Algorithm) — Bias-Free Weight Consensus.
+
+    Mathematical Foundation
+    -----------------------
+    Exact Diffusion corrects the well-known bias of standard diffusion/
+    consensus by maintaining a CORRECTION TERM φ_i that accumulates
+    the difference between successive local states.
+
+    The update rule (Yuan et al., 2018) is:
+
+        ψ_i(t+1) = x_i(t) + φ_i(t)          ← pre-combination step
+        x_i(t+1) = Σ_j W_ij · ψ_j(t+1)      ← combination step
+        φ_i(t+1) = ψ_i(t+1) - x_i(t+1) + φ_i(t)  ← correction update
+
+    where φ_i(0) = 0.
+
+    Intuition (analogy):
+        Think of each agent as a boat on water. Standard consensus is
+        like everyone rowing toward the average position — but if the
+        current (gradient bias) pushes you sideways, you drift.
+        Exact Diffusion is like each boat also tracking HOW MUCH it
+        has been pushed sideways and correcting for it every step.
+
+    Key property:
+        Under exact diffusion, the consensus error converges to ZERO
+        (not just close to zero), even with heterogeneous data and
+        fixed mixing matrices.
+
+    Compared to Gradient Tracking:
+        - Exact Diffusion uses only model weights (no gradient tracking)
+        - Simpler to implement, lower memory overhead
+        - Also achieves exact convergence
+        - Better suited for pure weight-averaging scenarios
+
+    Reference
+    ---------
+    - Yuan, K., Ying, B., Zhao, X., Sayed, A.H. (2018).
+      "Exact diffusion for distributed optimization and learning."
+      IEEE Transactions on Signal Processing.
+
+    Parameters
+    ----------
+    agent_list : list[Agent]
+    graph      : networkx.Graph
+    K          : int, iterations
+
+    Returns
+    -------
+    None — agents updated in-place.
+    """
+    n = len(agent_list)
+    W = _metropolis_weights(graph, n)
+
+    # Initialize correction terms φ_i = 0
+    phi = {
+        agent.id: {
+            key: torch.zeros_like(param)
+            for key, param in agent.model.state_dict().items()
+        }
+        for agent in agent_list
+    }
+
+    for k in range(K):
+
+        # ── Step 1 : pre-combination ψ_i = x_i + φ_i ──────────────────
+        psi = {}
+        for agent in agent_list:
+            x = agent.model.state_dict()
+            psi[agent.id] = {
+                key: x[key] + phi[agent.id][key]
+                for key in x
+            }
+
+        # ── Step 2 : combination x_i = Σ_j W_ij ψ_j ──────────────────
+        x_new = {}
+        for agent in agent_list:
+            combined = {
+                key: torch.zeros_like(psi[agent.id][key])
+                for key in psi[agent.id]
+            }
+            for other in agent_list:
+                wij = W[agent.id][other.id]
+                if wij > 0:
+                    for key in combined:
+                        combined[key] += wij * psi[other.id][key]
+            x_new[agent.id] = combined
+
+        # ── Step 3 : correction φ_i = ψ_i - x_i_new + φ_i ────────────
+        for agent in agent_list:
+            for key in phi[agent.id]:
+                phi[agent.id][key] = (
+                    psi[agent.id][key]
+                    - x_new[agent.id][key]
+                    + phi[agent.id][key]
+                )
+
+        # Apply updated weights
+        for agent in agent_list:
+            agent.model.load_state_dict(x_new[agent.id])
+
+        print(f"    [ExactDiff] iteration {k+1}/{K} complete")

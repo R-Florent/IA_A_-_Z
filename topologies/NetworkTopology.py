@@ -1,3 +1,5 @@
+import random
+
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -33,9 +35,40 @@ class NetworkTopology:
         return G
 
     @staticmethod
-    def random_graph(n_agents, p=0.3):
-        G = nx.erdos_renyi_graph(n_agents, p)
-        return G
+    def random_connected_graph(n: int, edge_probability: float = 0.3):
+        """
+        Generate a random connected undirected graph.
+
+        Properties:
+            - No isolated nodes
+            - The graph is connected
+            - Each node can have between 1 and N-1 neighbors
+            - Additional edges are randomly added
+        """
+
+        if n < 2:
+            raise ValueError("n must be at least 2")
+
+        # ----------------------------------------------------------
+        # Step 1: Generate a random spanning tree
+        # ----------------------------------------------------------
+        graph = nx.random_labeled_tree(n)
+
+        # ----------------------------------------------------------
+        # Step 2: Add random edges
+        # ----------------------------------------------------------
+        for i in range(n):
+            for j in range(i + 1, n):
+
+                # Edge already exists in the spanning tree
+                if graph.has_edge(i, j):
+                    continue
+
+                # Randomly add additional edges
+                if random.random() < edge_probability:
+                    graph.add_edge(i, j)
+
+        return graph
 
     @staticmethod
     def grid_graph(n_agents):
