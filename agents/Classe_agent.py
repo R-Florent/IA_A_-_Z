@@ -88,6 +88,7 @@ class Agent:
         return avg_train_loss,avg_train_accuracies
 
 
+
     def validate_one_epoch(self):
 
         self.model.eval()
@@ -123,16 +124,51 @@ class Agent:
 
     def train_and_validate(self,agent_list):
 
+        def node_weight_metric(agent_list: list) -> list[float]:
+
+            avg_state_dict = copy.deepcopy(agent_list[0].model.state_dict())
+
+            for key in avg_state_dict:
+                for i in range(1, len(agent_list)):
+                    avg_state_dict[key] = avg_state_dict[key] + \
+                                          agent_list[i].model.state_dict()[key]
+                # Division par le nombre total d'agents
+                avg_state_dict[key] = avg_state_dict[key] / len(agent_list)
+
+            total_distance_list = []
+
+            for agent in agent_list:
+
+                agent_state = agent.model.state_dict()
+                sum_of_squared_norms = 0.0
+
+                for key in avg_state_dict:
+                    # Différence param par param pour cette couche
+                    diff = avg_state_dict[key] - agent_state[key]
+
+                    # ‖diff_layer‖₂² — on accumule le CARRÉ
+                    squared_norm = torch.norm(diff).item() ** 2
+                    sum_of_squared_norms += squared_norm
+
+                # Racine carrée finale → vraie norme L2 dans l'espace global
+                total_distance = sum_of_squared_norms ** 0.5
+                total_distance_list.append(total_distance)
+
+            return total_distance_list
+
         try:
             val_loss, val_acc = self.validate_one_epoch()
 
             self.val_losses.append(val_loss)
             self.val_accuracies.append(val_acc)
-
+            self.total_distance_list.append(node_weight_metric(agent_list))
             start = time.perf_counter()
             train_loss, train_acc = self.train_one_epoch()
             elapsed = time.perf_counter() - start
+
+
             self.epoch_compute_times.append(elapsed)
+
             self.train_losses.append(train_loss)
             self.train_accuracies.append(train_acc)
 
@@ -160,7 +196,7 @@ class Agent:
          A deep copy is used to create an independent accumulator so that
          the original model parameters remain unchanged.
         """
-        
+
         avg_state_dict = copy.deepcopy(agent_list[0].model.state_dict())
 
         for key in avg_state_dict:
