@@ -573,7 +573,7 @@ def Hamiltonian_cycle_algorithm_hybride_consensus(agent_list, K, epoch, num_epoc
         )
         return r
 
-def _metropolis_weights(graph, n):
+def metropolis_weights(agent_list,graph, comm_cost=none):
     """
     Compute the Metropolis-Hastings Optimal Mixing Matrix.
 
@@ -613,7 +613,12 @@ def _metropolis_weights(graph, n):
         Mixing matrix as nested dict. W[i][j] = weight agent i gives
         to agent j's model.
     """
-    import networkx as nx
+    n = len(agent_list)
+
+    if comm_cost is not None:
+        total_messages = sum(dict(graph.degree()).values())  # = nb_arêtes × 2
+        comm_cost.set_epoch_messages(total_messages)
+
 
     W = {i: {j: 0.0 for j in range(n)} for i in range(n)}
 
@@ -628,7 +633,7 @@ def _metropolis_weights(graph, n):
 
     return W
 
-def push_sum_consensus(agent_list, graph, K=10):
+def push_sum_consensus(agent_list, graph, K=10,comm_cost=none):
     """
     Push-Sum Consensus Algorithm for Directed Graphs.
 
@@ -669,6 +674,10 @@ def push_sum_consensus(agent_list, graph, K=10):
     """
     n = len(agent_list)
 
+    if comm_cost is not None:
+        total_messages = sum(dict(graph.degree()).values())  # = nb_arêtes × 2
+        comm_cost.set_epoch_messages(total_messages)
+
     # Initialize: x_i = model weights, w_i = 1.0 (scalar per agent)
     x = {
         agent.id: copy.deepcopy(agent.model.state_dict())
@@ -682,7 +691,7 @@ def push_sum_consensus(agent_list, graph, K=10):
 
         for agent in agent_list:
             # Each agent splits its mass equally among out-neighbors + self
-            out_neighbors = list(graph.successors(agent.id))
+            out_neighbors = list(graph.neighbors(agent.id))
             recipients = [agent.id] + out_neighbors
             share = 1.0 / len(recipients)
 
@@ -718,7 +727,7 @@ def push_sum_consensus(agent_list, graph, K=10):
     return x, w
 
 
-def gradient_tracking_consensus(agent_list, graph, local_grad_fn, K=10, lr=0.01):
+def gradient_tracking_consensus(agent_list, graph, K=10, lr=0.01,comm_cost=None):
     """
     Gradient Tracking Consensus (DIGing / NEXT Algorithm).
 
@@ -791,10 +800,14 @@ def gradient_tracking_consensus(agent_list, graph, local_grad_fn, K=10, lr=0.01)
     -------
     None — agents updated in-place.
     """
+
     n = len(agent_list)
 
+    if comm_cost is not None:
+        comm_cost.set_epoch_messages(n)
+
     # Build mixing matrix W (Metropolis-Hastings weights — see algo 4)
-    W = _metropolis_weights(graph, n)
+    W = metropolis_weights(graph, n,metropolis_weights)
 
     # Initialize gradient trackers y_i = ∇f_i(x_i(0))
     y = {
@@ -865,7 +878,8 @@ def gradient_tracking_consensus(agent_list, graph, local_grad_fn, K=10, lr=0.01)
         print(f"    [GradTrack] iteration {k+1}/{K} complete")
 
 
-def exact_diffusion_consensus(agent_list, graph, K=10):
+
+def exact_diffusion_consensus(agent_list, graph, K=10, comm_cost=none ):
     """
     Exact Diffusion (D² Algorithm) — Bias-Free Weight Consensus.
 
@@ -918,7 +932,10 @@ def exact_diffusion_consensus(agent_list, graph, K=10):
     None — agents updated in-place.
     """
     n = len(agent_list)
-    W = _metropolis_weights(graph, n)
+    W = metropolis_weights(agent_list,graph,comm_cost=comm_cost)
+
+    if comm_cost is not None:
+        comm_cost.set_epoch_messages(n)
 
     # Initialize correction terms φ_i = 0
     phi = {

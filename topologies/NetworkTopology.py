@@ -35,7 +35,7 @@ class NetworkTopology:
         return G
 
     @staticmethod
-    def random_connected_graph(n: int, edge_probability: float = 0.3):
+    def random_graph(n: int, edge_probability: float = 0.3):
         """
         Generate a random connected undirected graph.
 
@@ -69,6 +69,64 @@ class NetworkTopology:
                     graph.add_edge(i, j)
 
         return graph
+
+    @staticmethod
+    def bus_graph(n_agents):
+        G = nx.Graph()
+        G.add_nodes_from(range(n_agents))
+
+        for i in range(n_agents - 1):
+            G.add_edge(i, i + 1)
+
+        return G
+
+    @staticmethod
+    def tree_graph(n_agents):
+        if n_agents < 1:
+            raise ValueError("error")
+
+        G = nx.Graph()
+        G.add_nodes_from(range(n_agents))
+
+        # Arbre binaire : chaque nœud i a enfants 2i+1 et 2i+2
+        for i in range(n_agents):
+            left_child = 2 * i + 1
+            right_child = 2 * i + 2
+
+            if left_child < n_agents:
+                G.add_edge(i, left_child)
+
+            if right_child < n_agents:
+                G.add_edge(i, right_child)
+
+        return G
+
+    @staticmethod
+    def directed_tree_graph(n_agents, direction="down"):
+
+        G = nx.DiGraph()
+        G.add_nodes_from(range(n_agents))
+
+        for i in range(n_agents):
+            left_child = 2 * i + 1
+            right_child = 2 * i + 2
+
+            if direction == "down":
+                if left_child < n_agents:
+                    G.add_edge(i, left_child)
+                if right_child < n_agents:
+                    G.add_edge(i, right_child)
+
+            elif direction == "up":
+                if left_child < n_agents:
+                    G.add_edge(left_child, i)
+                if right_child < n_agents:
+                    G.add_edge(right_child, i)
+
+            else:
+                raise ValueError("error")
+
+        return G
 
     @staticmethod
     def grid_graph(n_agents):

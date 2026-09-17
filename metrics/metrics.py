@@ -155,6 +155,8 @@ def plot_average_distance(results):
     plt.grid(True)
     plt.show()
 
+
+
 # ── Palette cohérente ──────────────────────────────────────────────────────
 _AGENT_COLORS = plt.cm.tab10.colors   # jusqu'à 10 agents
 
